@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Запись к мастеру</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#fbf1ec;--ink:#2b2622;--muted:#8a7d75;--green:#2f6650;--panel:#fff;--line:#ecd9d0;
+padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:520px;margin:0 auto;padding:18px 14px 130px}
+h1{font-family:Georgia,"Times New Roman",serif;font-size:30px;margin:6px 0 2px;color:var(--green)}
+.sub{color:var(--muted);margin:0 0 18px}
+h2{font-size:15px;margin:22px 0 8px}
+.svc{display:flex;align-items:center;gap:12px;background:var(--panel);border:1.5px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px}
+.svc.on{border-color:var(--green);background:#eef6f1}
+.svc .n{flex:1;font-weight:600;font-size:15px}.svc .p{color:var(--muted);font-size:14px;white-space:nowrap}
+.box{width:22px;height:22px;border:2px solid var(--line);border-radius:7px;display:grid;place-items:center;color:#fff;font-size:14px}
+.on .box{background:var(--green);border-color:var(--green)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1.5px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 13px;font-size:14px;font-weight:600;color:var(--ink)}
+.chip.on{background:var(--green);border-color:var(--green);color:#fff}
+input{width:100%;padding:13px;border:1.5px solid var(--line);border-radius:12px;font-size:16px;margin-bottom:8px;background:var(--panel);color:var(--ink)}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px))}
+.bar>div{max-width:520px;margin:0 auto}
+#sum{font-size:13px;color:var(--muted);margin-bottom:6px;min-height:17px}
+#go{width:100%;border:0;border-radius:12px;padding:15px;font-size:16px;font-weight:700;background:var(--green);color:#fff}
+#go:disabled{background:#cdbfb7}
+#err{color:#c0392b;font-size:14px;margin-top:8px}
+.done{text-align:center;padding:60px 10px}.done b{font-size:44px;display:block}
+</style>
+</head>
+<body>
+<main id="app">
+  <h1>Inga Master</h1>
+  <p class="sub">Наращивание ресниц</p>
+  <div id="body">Загрузка…</div>
+</main>
+<div class="bar" id="bar" hidden><div><div id="sum"></div><button id="go" disabled>Записаться</button></div></div>
+
+<script>
+// Вставьте сюда ссылку на веб-приложение Apps Script (заканчивается на /exec)
+var API = "https://script.google.com/macros/s/AKfycbyCfrOZpNavhpzHPVt940C0Er6qHk2j-MRtEIrRapWOaRAJheYRtcMkaBovM71TOZmq/exec";
+
+var tg = window.Telegram && Telegram.WebApp;
+if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
+function hap(){ try { tg.HapticFeedback.selectionChanged(); } catch (e) {} }
+
+var D = null, sel = {}, date = null, time = null;
+var $ = function (id) { return document.getElementById(id); };
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+fetch(API).then(function (r) { return r.json(); }).then(function (d) { D = d; build(); })
+  .catch(function () { $("body").textContent = "Не удалось загрузить данные. Попробуйте позже."; });
+
+function dayLabel(s) {
+  var a = s.split("/"), y = +a[2]; if (y < 100) y += 2000;
+  return new Date(y, +a[1] - 1, +a[0]).toLocaleDateString("ru", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function build() {
+  var h = '<h2>Выберите услуги</h2>';
+  D.services.forEach(function (s, i) {
+    h += '<div class="svc" data-i="' + i + '"><div class="box">✓</div><div class="n">' + esc(s.n) + '</div><div class="p">' + esc(s.p) + '</div></div>';
+  });
+  h += '<h2>Дата</h2><div class="chips" id="days">';
+  if (!D.days.length) h += 'Свободных окон пока нет.';
+  D.days.forEach(function (d, i) { h += '<button class="chip" data-d="' + i + '">' + esc(dayLabel(d.d)) + '</button>'; });
+  h += '</div><div id="tw" hidden><h2>Время</h2><div class="chips" id="times"></div></div>';
+  h += '<h2>Ваши данные</h2><input id="nm" placeholder="Имя" autocomplete="name"><input id="ph" type="tel" placeholder="Телефон" autocomplete="tel"><div id="err"></div>';
+  $("body").innerHTML = h;
+  $("bar").hidden = false;
+  var u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+  if (u && u.first_name) $("nm").value = u.first_name;
+
+  $("body").onclick = function (e) {
+    var s = e.target.closest(".svc"), d = e.target.closest("[data-d]"), t = e.target.closest("[data-t]");
+    if (s) { var i = s.getAttribute("data-i"); if (sel[i]) delete sel[i]; else sel[i] = 1; s.classList.toggle("on"); hap(); }
+    if (d) {
+      document.querySelectorAll("#days .chip").forEach(function (c) { c.classList.remove("on"); });
+      d.classList.add("on"); var day = D.days[+d.getAttribute("data-d")]; date = day.d; time = null;
+      $("times").innerHTML = day.t.map(function (x) { return '<button class="chip" data-t="' + esc(x) + '">' + esc(x) + '</button>'; }).join("");
+      $("tw").hidden = false; hap();
+    }
+    if (t) {
+      document.querySelectorAll("#times .chip").forEach(function (c) { c.classList.remove("on"); });
+      t.classList.add("on"); time = t.getAttribute("data-t"); hap();
+    }
+    upd();
+  };
+  $("nm").oninput = $("ph").oninput = upd;
+  $("go").onclick = send;
+  upd();
+}
+
+function chosen() { return Object.keys(sel).map(function (i) { return D.services[i]; }); }
+function upd() {
+  var c = chosen(), sum = 0, from = false, pct = 1;
+  c.forEach(function (s) {
+    var p = s.p.trim(), m = p.match(/^\D*(\d+)\s*т$/), k = p.match(/(\d+)\s*%/);
+    if (m) sum += +m[1];
+    else if (k) pct *= +k[1] / 100;
+    if (/^от/i.test(p)) from = true;
+  });
+  sum = Math.round(sum * pct);
+  var tot = (sum === 0 && pct < 1) ? Math.round(pct * 100) + "% от стоимости услуги" : (from ? "от " : "") + sum.toLocaleString("ru") + " т";
+  $("sum").textContent = c.length ? "Итого: " + tot + (date && time ? " · " + dayLabel(date) + ", " + time : "") : "Выберите услугу, дату и время";
+  var ok = c.length && date && time && $("nm").value.trim() && $("ph").value.replace(/\D/g, "").length >= 7;
+  $("go").disabled = !ok;
+}
+
+function send() {
+  $("go").disabled = true; $("go").textContent = "Отправляем…"; $("err").textContent = "";
+  fetch(API, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({
+    initData: tg ? tg.initData : "", services: chosen().map(function (s) { return s.n; }),
+    date: date, time: time, name: $("nm").value.trim(), phone: $("ph").value.trim() }) })
+  .then(function (r) { return r.json(); }).then(function (r) {
+    if (r.ok) {
+      $("bar").hidden = true;
+      $("body").innerHTML = '<div class="done"><b>✅</b><h2>Вы записаны</h2><p>' + esc(dayLabel(date)) + ', ' + esc(time) + '<br>Подтверждение придёт в чат с ботом.</p></div>';
+      try { tg.HapticFeedback.notificationOccurred("success"); setTimeout(function () { tg.close(); }, 3000); } catch (e) {}
+    } else { $("err").textContent = r.error || "Ошибка"; $("go").textContent = "Записаться"; $("go").disabled = false; }
+  }).catch(function () { $("err").textContent = "Нет связи. Попробуйте ещё раз."; $("go").textContent = "Записаться"; $("go").disabled = false; });
+}
+</script>
+</body>
+</html>
