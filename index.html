@@ -20,6 +20,15 @@ h2{font-size:15px;margin:22px 0 8px}
 .my{display:flex;align-items:center;gap:12px;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px}.my .n{flex:1;font-weight:600;font-size:15px}.my small{display:block;color:var(--muted);font-weight:400;font-size:13px;margin-top:2px}
 .box{width:22px;height:22px;border:2px solid var(--line);border-radius:7px;display:grid;place-items:center;color:#fff;font-size:14px}
 .on .box{background:var(--green);border-color:var(--green)}
+.cal{background:var(--panel);border:1.5px solid var(--line);border-radius:14px;padding:12px}
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:16px}
+.nav{width:38px;height:38px;border:0;border-radius:10px;background:var(--bg);font-size:24px;color:var(--green)}.nav:disabled{opacity:.3}
+.cg{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cg i{font-style:normal;font-size:12px;color:var(--muted);padding:4px 0}
+.day{aspect-ratio:1;display:grid;place-items:center;border-radius:10px;font-size:15px;border:0;background:transparent;color:var(--muted);opacity:.35;padding:0}
+button.day{opacity:1;background:#eef6f1;color:var(--green);font-weight:700}
+button.day.on{background:var(--green);color:#fff}
+.day.today{box-shadow:inset 0 0 0 1.5px var(--green)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{border:1.5px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 13px;font-size:14px;font-weight:600;color:var(--ink)}
 .chip.on{background:var(--green);border-color:var(--green);color:#fff}
@@ -67,26 +76,26 @@ function build() {
   D.services.forEach(function (s, i) {
     h += '<div class="svc" data-i="' + i + '"><div class="box">✓</div><div class="n">' + esc(s.n) + '</div><div class="p">' + esc(s.p) + '</div></div>';
   });
-  h += '<h2>Дата</h2><div class="chips" id="days">';
-  if (!D.days.length) h += 'Свободных окон пока нет.';
-  D.days.forEach(function (d, i) { h += '<button class="chip" data-d="' + i + '">' + esc(dayLabel(d.d)) + '</button>'; });
-  h += '</div><div id="tw" hidden><h2>Время</h2><div class="chips" id="times"></div></div>';
+  h += '<h2>Дата</h2><div id="cal"></div><div id="tw" hidden><h2>Время</h2><div class="chips" id="times"></div></div>';
   h += '<h2>Ваши данные</h2><input id="nm" placeholder="Имя" autocomplete="name"><input id="ph" type="tel" placeholder="Телефон" autocomplete="tel"><div id="err"></div>';
   $("body").innerHTML = h;
   $("bar").hidden = false;
+  drawCal();
   var u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
   if (u && u.first_name) $("nm").value = u.first_name;
 
   $("body").onclick = function (e) {
+    var nv = e.target.closest("[data-nav]");
+    if (nv) { if (!nv.disabled) { CM.m += +nv.getAttribute("data-nav"); if (CM.m < 0) { CM.m = 11; CM.y--; } if (CM.m > 11) { CM.m = 0; CM.y++; } drawCal(); } return; }
     var cb = e.target.closest("[data-c]");
     if (cb) { cancelBooking(+cb.getAttribute("data-c")); return; }
     var s = e.target.closest(".svc"), d = e.target.closest("[data-d]"), t = e.target.closest("[data-t]");
     if (s) { var i = s.getAttribute("data-i"); if (sel[i]) delete sel[i]; else sel[i] = 1; s.classList.toggle("on"); hap(); }
     if (d) {
-      document.querySelectorAll("#days .chip").forEach(function (c) { c.classList.remove("on"); });
-      d.classList.add("on"); var day = D.days[+d.getAttribute("data-d")]; date = day.d; time = null;
+      var day = D.days[+d.getAttribute("data-d")]; date = day.d; time = null; drawCal();
       $("times").innerHTML = day.t.map(function (x) { return '<button class="chip" data-t="' + esc(x) + '">' + esc(x) + '</button>'; }).join("");
       $("tw").hidden = false; hap();
+      try { $("tw").scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) {}
     }
     if (t) {
       document.querySelectorAll("#times .chip").forEach(function (c) { c.classList.remove("on"); });
@@ -121,6 +130,28 @@ function cancelBooking(i) {
   post({ action: "cancel", date: b.d, time: b.t }).then(function (r) {
     if (r.ok) location.reload(); else alert(r.error || "Ошибка");
   }).catch(function () { alert("Нет связи"); });
+}
+
+var CM = null, MN = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+function p2(n) { return ("0" + n).slice(-2); }
+function pd(s) { var a = s.split("/"), y = +a[2]; if (y < 100) y += 2000; return new Date(y, +a[1] - 1, +a[0]); }
+function drawCal() {
+  var el = $("cal");
+  if (!D.days.length) { el.textContent = "Свободных окон пока нет."; return; }
+  var idx = {}; D.days.forEach(function (d, i) { idx[d.d] = i; });
+  var a = pd(D.days[0].d), b = pd(D.days[D.days.length - 1].d), now = new Date();
+  if (!CM) CM = { y: a.getFullYear(), m: a.getMonth() };
+  var y = CM.y, m = CM.m, off = (new Date(y, m, 1).getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate();
+  var cur = y * 12 + m, tk = p2(now.getDate()) + "/" + p2(now.getMonth() + 1) + "/" + p2(now.getFullYear() % 100);
+  var h = '<div class="cal"><div class="ch"><button class="nav" data-nav="-1"' + (cur > a.getFullYear() * 12 + a.getMonth() ? "" : " disabled") + '>‹</button><b>' + MN[m] + " " + y + '</b><button class="nav" data-nav="1"' + (cur < b.getFullYear() * 12 + b.getMonth() ? "" : " disabled") + '>›</button></div><div class="cg">';
+  ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].forEach(function (w) { h += "<i>" + w + "</i>"; });
+  for (var i = 0; i < off; i++) h += "<span></span>";
+  for (var k = 1; k <= n; k++) {
+    var key = p2(k) + "/" + p2(m + 1) + "/" + p2(y % 100), j = idx[key], t = key === tk ? " today" : "";
+    h += j === undefined ? '<span class="day off' + t + '">' + k + "</span>"
+      : '<button class="day' + (date === key ? " on" : "") + t + '" data-d="' + j + '">' + k + "</button>";
+  }
+  el.innerHTML = h + "</div></div>";
 }
 
 function chosen() { return Object.keys(sel).map(function (i) { return D.services[i]; }); }
