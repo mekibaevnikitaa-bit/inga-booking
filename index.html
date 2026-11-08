@@ -17,6 +17,7 @@ h2{font-size:15px;margin:22px 0 8px}
 .svc{display:flex;align-items:center;gap:12px;background:var(--panel);border:1.5px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px}
 .svc.on{border-color:var(--green);background:#eef6f1}
 .svc .n{flex:1;font-weight:600;font-size:15px}.svc .p{color:var(--muted);font-size:14px;white-space:nowrap}
+.my{display:flex;align-items:center;gap:12px;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px}.my .n{flex:1;font-weight:600;font-size:15px}.my small{display:block;color:var(--muted);font-weight:400;font-size:13px;margin-top:2px}
 .box{width:22px;height:22px;border:2px solid var(--line);border-radius:7px;display:grid;place-items:center;color:#fff;font-size:14px}
 .on .box{background:var(--green);border-color:var(--green)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -57,11 +58,12 @@ fetch(API).then(function (r) { return r.json(); }).then(function (d) { D = d; bu
 
 function dayLabel(s) {
   var a = s.split("/"), y = +a[2]; if (y < 100) y += 2000;
-  return new Date(y, +a[1] - 1, +a[0]).toLocaleDateString("ru", { weekday: "short", day: "numeric", month: "short" });
+  var dt = new Date(y, +a[1] - 1, +a[0]);
+  return isNaN(dt) ? s : dt.toLocaleDateString("ru", { weekday: "short", day: "numeric", month: "short" });
 }
 
 function build() {
-  var h = '<h2>Выберите услуги</h2>';
+  var h = '<div id="mine"></div><h2>Выберите услуги</h2>';
   D.services.forEach(function (s, i) {
     h += '<div class="svc" data-i="' + i + '"><div class="box">✓</div><div class="n">' + esc(s.n) + '</div><div class="p">' + esc(s.p) + '</div></div>';
   });
@@ -76,6 +78,8 @@ function build() {
   if (u && u.first_name) $("nm").value = u.first_name;
 
   $("body").onclick = function (e) {
+    var cb = e.target.closest("[data-c]");
+    if (cb) { cancelBooking(+cb.getAttribute("data-c")); return; }
     var s = e.target.closest(".svc"), d = e.target.closest("[data-d]"), t = e.target.closest("[data-t]");
     if (s) { var i = s.getAttribute("data-i"); if (sel[i]) delete sel[i]; else sel[i] = 1; s.classList.toggle("on"); hap(); }
     if (d) {
@@ -93,6 +97,30 @@ function build() {
   $("nm").oninput = $("ph").oninput = upd;
   $("go").onclick = send;
   upd();
+  loadMine();
+}
+
+var MY = [];
+function post(o) {
+  o.initData = tg ? tg.initData : "";
+  return fetch(API, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(o) }).then(function (r) { return r.json(); });
+}
+function loadMine() {
+  if (!tg || !tg.initData) return;
+  post({ action: "my" }).then(function (r) {
+    if (!r.ok || !r.list.length) { $("mine").innerHTML = ""; return; }
+    MY = r.list;
+    $("mine").innerHTML = "<h2>Ваши записи</h2>" + MY.map(function (b, i) {
+      return '<div class="my"><div class="n">' + esc(dayLabel(b.d)) + ", " + esc(b.t) + "<small>" + esc(b.s) + '</small></div><button class="chip" data-c="' + i + '">Отменить</button></div>';
+    }).join("");
+  }).catch(function () {});
+}
+function cancelBooking(i) {
+  var b = MY[i];
+  if (!b || !confirm("Отменить запись на " + dayLabel(b.d) + ", " + b.t + "?")) return;
+  post({ action: "cancel", date: b.d, time: b.t }).then(function (r) {
+    if (r.ok) location.reload(); else alert(r.error || "Ошибка");
+  }).catch(function () { alert("Нет связи"); });
 }
 
 function chosen() { return Object.keys(sel).map(function (i) { return D.services[i]; }); }
