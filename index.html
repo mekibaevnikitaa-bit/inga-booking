@@ -29,6 +29,19 @@ h2{font-size:15px;margin:22px 0 8px}
 button.day{opacity:1;background:#eef6f1;color:var(--green);font-weight:700}
 button.day.on{background:var(--green);color:#fff}
 .day.today{box-shadow:inset 0 0 0 1.5px var(--green)}
+.adm{width:100%;border:0;border-radius:12px;padding:13px;margin-bottom:14px;background:#2b2622;color:#fff;font-weight:700;font-size:15px}
+#admv{position:fixed;top:0;right:0;bottom:0;left:0;background:var(--bg);overflow:auto;z-index:5;padding-top:env(safe-area-inset-top,0px)}
+.admw{max-width:520px;margin:0 auto;padding:18px 14px 40px}
+.back{border:0;background:none;color:var(--green);font-size:15px;font-weight:700;padding:6px 0}
+.ad{aspect-ratio:1;display:grid;place-items:center;position:relative;border:0;border-radius:10px;background:transparent;color:var(--ink);font-size:15px;padding:0}
+.ad.has{background:#eef6f1;color:var(--green);font-weight:700}
+.ad.bk::after{content:"";position:absolute;bottom:4px;width:5px;height:5px;border-radius:50%;background:#e9967a}
+.ad.on{background:var(--green);color:#fff}
+.ad.today{box-shadow:inset 0 0 0 1.5px var(--green)}
+small.fr{color:var(--green);font-weight:600}
+.my a{color:var(--ink)}
+.rbtns{display:flex;gap:8px;margin-top:12px}.rbtns button{flex:1;padding:12px;border:0;border-radius:10px;font-weight:700;font-size:15px}.go2{background:var(--green);color:#fff}.go2:disabled{background:#cdbfb7}.no{background:var(--bg);color:var(--ink)}
+#rs .chip{margin:0 6px 6px 0}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{border:1.5px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 13px;font-size:14px;font-weight:600;color:var(--ink)}
 .chip.on{background:var(--green);border-color:var(--green);color:#fff}
@@ -48,6 +61,7 @@ input{width:100%;padding:13px;border:1.5px solid var(--line);border-radius:12px;
   <p class="sub">Наращивание ресниц</p>
   <div id="body">Загрузка…</div>
 </main>
+<div id="admv" hidden><div class="admw"><button class="back" id="admback">← Назад к записи</button><h1>Календарь мастера</h1><div id="acal"></div><div id="rs" hidden></div><div id="adet"></div></div></div>
 <div class="bar" id="bar" hidden><div><div id="sum"></div><button id="go" disabled>Записаться</button></div></div>
 
 <script>
@@ -72,7 +86,7 @@ function dayLabel(s) {
 }
 
 function build() {
-  var h = '<div id="mine"></div><h2>Выберите услуги</h2>';
+  var h = '<button id="adm" class="adm" hidden>📅 Календарь мастера</button><div id="mine"></div><h2>Выберите услуги</h2>';
   D.services.forEach(function (s, i) {
     h += '<div class="svc" data-i="' + i + '"><div class="box">✓</div><div class="n">' + esc(s.n) + '</div><div class="p">' + esc(s.p) + '</div></div>';
   });
@@ -117,6 +131,7 @@ function post(o) {
 function loadMine() {
   if (!tg || !tg.initData) return;
   post({ action: "my" }).then(function (r) {
+    if (r && r.master) { $("adm").hidden = false; $("adm").onclick = openAdmin; }
     if (!r.ok || !r.list.length) { $("mine").innerHTML = ""; return; }
     MY = r.list;
     $("mine").innerHTML = "<h2>Ваши записи</h2>" + MY.map(function (b, i) {
@@ -153,6 +168,107 @@ function drawCal() {
   }
   el.innerHTML = h + "</div></div>";
 }
+
+var AD = {}, AC = null, adate = null;
+function kk(d) { return p2(d.getDate()) + "/" + p2(d.getMonth() + 1) + "/" + p2(d.getFullYear() % 100); }
+function drawACal() {
+  var now = new Date();
+  if (!AC) AC = { y: now.getFullYear(), m: now.getMonth() };
+  var y = AC.y, m = AC.m, off = (new Date(y, m, 1).getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate(), tk = kk(now);
+  var h = '<div class="cal"><div class="ch"><button class="nav" data-anav="-1">‹</button><b>' + MN[m] + " " + y + '</b><button class="nav" data-anav="1">›</button></div><div class="cg">';
+  ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].forEach(function (w) { h += "<i>" + w + "</i>"; });
+  for (var i = 0; i < off; i++) h += "<span></span>";
+  for (var k = 1; k <= n; k++) {
+    var key = p2(k) + "/" + p2(m + 1) + "/" + p2(y % 100), it = AD[key] || [];
+    var booked = it.some(function (x) { return !x.free; });
+    h += '<button class="ad' + (it.length ? " has" : "") + (booked ? " bk" : "") + (adate === key ? " on" : "") + (key === tk ? " today" : "") + '" data-ad="' + key + '">' + k + "</button>";
+  }
+  $("acal").innerHTML = h + "</div></div>";
+}
+function showDay(k) {
+  adate = k; drawACal();
+  var it = AD[k] || [];
+  $("adet").innerHTML = "<h2>" + esc(dayLabel(k)) + "</h2>" + (it.length ? it.map(function (x) {
+    var T = esc(x.t);
+    if (x.free) return '<div class="my"><div class="n">' + T + '<small class="' + (x.closed ? "" : "fr") + '">' + (x.closed ? "Закрыто" : "Свободно") + '</small></div><button class="chip" data-' + (x.closed ? "op" : "cl") + '="' + T + '">' + (x.closed ? "Открыть" : "Закрыть") + "</button></div>";
+    return '<div class="my"><div class="n">' + T + " · " + esc(x.n) + '<small><a href="tel:' + esc(x.p) + '">' + esc(x.p) + "</a><br>" + esc(x.s) + '</small></div><div style="display:grid;gap:6px"><button class="chip" data-mv="' + T + '">Перенести</button><button class="chip" data-mc="' + T + '">Отменить</button></div></div>';
+  }).join("") : '<p class="sub">На этот день нет записей и свободного времени.</p>');
+}
+function openAdmin() {
+  $("admv").hidden = false; $("adet").textContent = "Загрузка…"; $("acal").innerHTML = "";
+  post({ action: "admin" }).then(function (r) {
+    if (!r.ok) { $("adet").textContent = r.error || "Ошибка"; return; }
+    AD = r.days; AC = null; adate = null; drawACal();
+    var t = kk(new Date());
+    if (AD[t]) showDay(t); else $("adet").innerHTML = '<p class="sub">Выберите дату в календаре.</p>';
+  }).catch(function () { $("adet").textContent = "Нет связи"; });
+}
+$("admback").onclick = function () { $("admv").hidden = true; };
+var RS = null;
+function openMove(t) {
+  var x = (AD[adate] || []).filter(function (i) { return !i.free && i.t === t; })[0];
+  if (!x) return;
+  RS = { d: adate, t: t, nd: "", nt: "", man: false };
+  var n = new Date(), mn = n.getFullYear() + "-" + p2(n.getMonth() + 1) + "-" + p2(n.getDate());
+  $("rs").hidden = false;
+  $("rs").innerHTML = '<div class="cal"><b>Перенос записи</b><p class="sub" style="margin:4px 0 10px">' + esc(x.n) + " · " + esc(dayLabel(adate)) + ", " + esc(t) + '</p><input type="date" id="rd" min="' + mn + '"><div id="rsl"></div><div class="rbtns"><button class="no" id="rcl">Отмена</button><button class="go2" id="rgo" disabled>Перенести</button></div></div>';
+  $("rd").onchange = rDate; $("rcl").onclick = closeMove; $("rgo").onclick = doMove;
+  try { $("rs").scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) {}
+}
+function closeMove() { RS = null; $("rs").hidden = true; $("rs").innerHTML = ""; }
+function chk() { $("rgo").disabled = !(RS && RS.nd && /^\d{2}:\d{2}$/.test(RS.nt)); }
+function manInput() {
+  if ($("rm")) return;
+  var i = document.createElement("input"); i.type = "time"; i.id = "rm";
+  i.oninput = function () { RS.nt = this.value; chk(); };
+  $("rsl").appendChild(i);
+}
+function rDate() {
+  var v = $("rd").value; RS.nt = ""; RS.man = false;
+  if (!v) { RS.nd = ""; $("rsl").innerHTML = ""; chk(); return; }
+  var a = v.split("-"); RS.nd = a[2] + "/" + a[1] + "/" + a[0].slice(-2);
+  var free = (AD[RS.nd] || []).filter(function (i) { return i.free && !i.closed; });
+  if (free.length) {
+    $("rsl").innerHTML = '<h2>Свободное время</h2><div class="chips">' + free.map(function (i) { return '<button class="chip" data-rt="' + esc(i.t) + '">' + esc(i.t) + "</button>"; }).join("") + '<button class="chip" data-rt="*">＋ Другое</button></div>';
+  } else {
+    $("rsl").innerHTML = '<p class="sub">' + (AD[RS.nd] ? "На эту дату нет свободного времени." : "Этой даты нет в расписании.") + " Впишите время самостоятельно:</p>";
+    RS.man = true; manInput();
+  }
+  chk();
+}
+function doMove() {
+  if (!RS || !confirm("Перенести запись на " + dayLabel(RS.nd) + ", " + RS.nt + "? Клиент получит уведомление.")) return;
+  var nd = RS.nd; $("rgo").disabled = true;
+  post({ action: "move", date: RS.d, time: RS.t, nd: nd, nt: RS.nt }).then(function (r) {
+    if (r.ok) { closeMove(); var p = pd(nd); AC = { y: p.getFullYear(), m: p.getMonth() }; adate = nd; refreshAdmin(); }
+    else { alert(r.error || "Ошибка"); chk(); }
+  }).catch(function () { alert("Нет связи"); chk(); });
+}
+$("rs").addEventListener("click", function (e) {
+  var c = e.target.closest("[data-rt]"); if (!c || !RS) return;
+  document.querySelectorAll("#rs [data-rt]").forEach(function (b) { b.classList.remove("on"); });
+  c.classList.add("on");
+  var v = c.getAttribute("data-rt");
+  if (v === "*") { RS.nt = ""; RS.man = true; manInput(); }
+  else { RS.nt = v; RS.man = false; if ($("rm")) $("rm").remove(); }
+  chk();
+});
+function refreshAdmin() {
+  post({ action: "admin" }).then(function (r) { if (r.ok) { AD = r.days; drawACal(); if (adate) showDay(adate); } });
+}
+function adone(r) { if (r.ok) refreshAdmin(); else alert(r.error || "Ошибка"); }
+$("admv").addEventListener("click", function (e) {
+  var nv = e.target.closest("[data-anav]"), dd = e.target.closest("[data-ad]");
+  var mv = e.target.closest("[data-mv]"), mc = e.target.closest("[data-mc]"), cl = e.target.closest("[data-cl]"), op = e.target.closest("[data-op]");
+  if (nv && AC) { AC.m += +nv.getAttribute("data-anav"); if (AC.m < 0) { AC.m = 11; AC.y--; } if (AC.m > 11) { AC.m = 0; AC.y++; } drawACal(); }
+  else if (mv) openMove(mv.getAttribute("data-mv"));
+  else if (mc) {
+    var t = mc.getAttribute("data-mc");
+    if (confirm("Отменить запись на " + dayLabel(adate) + ", " + t + "? Клиент получит уведомление.")) post({ action: "mcancel", date: adate, time: t }).then(adone);
+  }
+  else if (cl || op) { var b = cl || op; post({ action: "close", date: adate, time: b.getAttribute(cl ? "data-cl" : "data-op"), on: !!cl }).then(adone); }
+  else if (dd) showDay(dd.getAttribute("data-ad"));
+});
 
 function chosen() { return Object.keys(sel).map(function (i) { return D.services[i]; }); }
 function upd() {
