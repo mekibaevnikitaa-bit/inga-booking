@@ -190,9 +190,9 @@ function showDay(k) {
   var it = AD[k] || [];
   $("adet").innerHTML = "<h2>" + esc(dayLabel(k)) + "</h2>" + (it.length ? it.map(function (x) {
     var T = esc(x.t);
-    if (x.free) return '<div class="my"><div class="n">' + T + '<small class="' + (x.closed ? "" : "fr") + '">' + (x.closed ? "Закрыто" : "Свободно") + '</small></div><button class="chip" data-' + (x.closed ? "op" : "cl") + '="' + T + '">' + (x.closed ? "Открыть" : "Закрыть") + "</button></div>";
+    if (x.free) return '<div class="my"><div class="n">' + T + '<small class="' + (x.closed ? "" : "fr") + '">' + (x.closed ? "Закрыто" : "Свободно") + '</small></div><div style="display:grid;gap:6px">' + (x.closed ? "" : '<button class="chip" data-bk="' + T + '">Записать</button>') + '<button class="chip" data-' + (x.closed ? "op" : "cl") + '="' + T + '">' + (x.closed ? "Открыть" : "Закрыть") + "</button></div></div>";
     return '<div class="my"><div class="n">' + T + " · " + esc(x.n) + '<small><a href="tel:' + esc(x.p) + '">' + esc(x.p) + "</a><br>" + esc(x.s) + '</small></div><div style="display:grid;gap:6px"><button class="chip" data-mv="' + T + '">Перенести</button><button class="chip" data-mc="' + T + '">Отменить</button></div></div>';
-  }).join("") : '<p class="sub">На этот день нет записей и свободного времени.</p>');
+  }).join("") : '<p class="sub">На этот день нет записей и свободного времени.</p>') + '<button class="adm" style="margin-top:10px" data-bk="*">＋ Записать клиента</button>';
 }
 function openAdmin() {
   $("admv").hidden = false; $("adet").textContent = "Загрузка…"; $("acal").innerHTML = "";
@@ -253,14 +253,48 @@ $("rs").addEventListener("click", function (e) {
   else { RS.nt = v; RS.man = false; if ($("rm")) $("rm").remove(); }
   chk();
 });
+var BK = null;
+function bchk() {
+  $("bgo").disabled = !(BK && $("bn").value.trim() && $("bp").value.replace(/\D/g, "").length >= 7 && Object.keys(BK.sel).length && (BK.t || /^\d{2}:\d{2}$/.test($("bt").value)));
+}
+function openBook(t) {
+  closeMove();
+  BK = { d: adate, t: t === "*" ? "" : t, sel: {} };
+  var h = '<div class="cal"><b>Запись клиента</b><p class="sub" style="margin:4px 0 10px">' + esc(dayLabel(adate)) + (BK.t ? ", " + esc(BK.t) : "") + "</p>";
+  if (!BK.t) h += '<input type="time" id="bt">';
+  h += '<input id="bn" placeholder="Имя клиента"><input id="bp" type="tel" placeholder="Телефон"><h2>Услуги</h2><div class="chips">' +
+    D.services.map(function (s, i) { return '<button class="chip" data-bs="' + i + '">' + esc(s.n) + "</button>"; }).join("") +
+    '</div><div class="rbtns"><button class="no" id="bcl">Отмена</button><button class="go2" id="bgo" disabled>Записать</button></div></div>';
+  $("rs").hidden = false; $("rs").innerHTML = h;
+  $("bn").oninput = $("bp").oninput = bchk; if ($("bt")) $("bt").oninput = bchk;
+  $("bcl").onclick = function () { BK = null; $("rs").hidden = true; $("rs").innerHTML = ""; };
+  $("bgo").onclick = doBook;
+  try { $("rs").scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) {}
+}
+function doBook() {
+  var t = BK.t || $("bt").value, nm = $("bn").value.trim(), ph = $("bp").value.trim();
+  var sv = Object.keys(BK.sel).map(function (i) { return D.services[i].n; });
+  if (!confirm("Записать " + nm + " на " + dayLabel(BK.d) + ", " + t + "?")) return;
+  $("bgo").disabled = true;
+  post({ action: "mbook", date: BK.d, time: t, name: nm, phone: ph, services: sv }).then(function (r) {
+    if (r.ok) { BK = null; $("rs").hidden = true; $("rs").innerHTML = ""; refreshAdmin(); }
+    else { alert(r.error || "Ошибка"); bchk(); }
+  }).catch(function () { alert("Нет связи"); bchk(); });
+}
+$("rs").addEventListener("click", function (e) {
+  var c = e.target.closest("[data-bs]"); if (!c || !BK) return;
+  var i = c.getAttribute("data-bs"); if (BK.sel[i]) delete BK.sel[i]; else BK.sel[i] = 1;
+  c.classList.toggle("on"); bchk();
+});
 function refreshAdmin() {
   post({ action: "admin" }).then(function (r) { if (r.ok) { AD = r.days; drawACal(); if (adate) showDay(adate); } });
 }
 function adone(r) { if (r.ok) refreshAdmin(); else alert(r.error || "Ошибка"); }
 $("admv").addEventListener("click", function (e) {
   var nv = e.target.closest("[data-anav]"), dd = e.target.closest("[data-ad]");
-  var mv = e.target.closest("[data-mv]"), mc = e.target.closest("[data-mc]"), cl = e.target.closest("[data-cl]"), op = e.target.closest("[data-op]");
+  var bk = e.target.closest("[data-bk]"), mv = e.target.closest("[data-mv]"), mc = e.target.closest("[data-mc]"), cl = e.target.closest("[data-cl]"), op = e.target.closest("[data-op]");
   if (nv && AC) { AC.m += +nv.getAttribute("data-anav"); if (AC.m < 0) { AC.m = 11; AC.y--; } if (AC.m > 11) { AC.m = 0; AC.y++; } drawACal(); }
+  else if (bk) openBook(bk.getAttribute("data-bk"));
   else if (mv) openMove(mv.getAttribute("data-mv"));
   else if (mc) {
     var t = mc.getAttribute("data-mc");
