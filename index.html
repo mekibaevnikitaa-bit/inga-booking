@@ -76,8 +76,13 @@ var D = null, sel = {}, date = null, time = null;
 var $ = function (id) { return document.getElementById(id); };
 function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
 
-fetch(API).then(function (r) { return r.json(); }).then(function (d) { D = d; build(); })
-  .catch(function () { $("body").textContent = "Не удалось загрузить данные. Попробуйте позже."; });
+window.onerror = function (m, s, l) { var b = document.getElementById("body"); if (b) b.innerHTML = '<p style="color:#c0392b">Ошибка в приложении: ' + String(m) + ' (строка ' + l + ')</p>'; };
+function withTimeout(p, ms) { return Promise.race([p, new Promise(function (_, rej) { setTimeout(function () { rej(new Error("нет ответа от сервера за " + (ms / 1000) + " сек")); }, ms); })]); }
+withTimeout(fetch(API), 15000).then(function (r) { return r.text(); }).then(function (t) {
+  var d; try { d = JSON.parse(t); } catch (e) { throw new Error("сервер вернул не данные: " + t.slice(0, 150)); }
+  if (!d || !d.services) throw new Error("пустой ответ: " + t.slice(0, 150));
+  D = d; build();
+}).catch(function (e) { $("body").innerHTML = '<p style="color:#c0392b">Не удалось загрузить: ' + esc(e.message) + '</p>'; });
 
 function dayLabel(s) {
   var a = s.split("/"), y = +a[2]; if (y < 100) y += 2000;
@@ -290,12 +295,4 @@ var AW = null;
 function toIso(k) { var d = pd(k); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()); }
 function awDraw() {
   AW.times.sort();
-  $("ad_l").innerHTML = AW.times.map(function (t) { return '<button class="chip on" data-aw="' + t + '">' + t + " ✕</button>"; }).join("") || '<span class="sub">Добавьте время кнопкой ＋</span>';
-  $("ad_go").disabled = !AW.times.length;
-}
-function awAdd(t) { if (/^\d{2}:\d{2}$/.test(t) && AW.times.indexOf(t) < 0) AW.times.push(t); }
-function closeAdd() { AW = null; $("rs").hidden = true; $("rs").innerHTML = ""; }
-function openAdd() {
-  closeMove(); BK = null; AW = { times: [] };
-  $("rs").hidden = false;
-  $("rs").innerHTML = '<div class="cal"><b>Добавить свободные окна</b><input type="date" id="ad_d" value="' + toIso(adate) + '" min="' + toIso(kk(new Date())) + '" style="margin-top:8px"><div style="display:flex;gap:8px"><input type="time" id="ad_t" style="margin:0"><button clas
+  $("ad_l").innerHTML = AW.times.map(function (t) { return '<button class="chip on" data-aw="' + t + '">' + t + " ✕</button>"; }).join("") || '<span class="sub">Доб
