@@ -1,0 +1,6 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>test</title></head>
+<body style="font-family:sans-serif;padding:20px">
+<p id="t">HTML работает. JavaScript: не запущен</p>
+<script>document.getElementById("t").textContent = "HTML работает. JavaScript РАБОТАЕТ (тест)";</script>
+</body></html>
