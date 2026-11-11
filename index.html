@@ -59,7 +59,7 @@ input{width:100%;padding:13px;border:1.5px solid var(--line);border-radius:12px;
 <main id="app">
   <h1>Inga Master</h1>
   <p class="sub">Наращивание ресниц</p>
-  <div id="body">Загрузка… (версия 4)</div>
+  <div id="body">Загрузка… (версия 5, скрипт не запущен)</div>
 </main>
 <div id="admv" hidden><div class="admw"><button class="back" id="admback">← Назад к записи</button><h1>Календарь мастера</h1><div id="acal"></div><div id="rs" hidden></div><div id="adet"></div></div></div>
 <div class="bar" id="bar" hidden><div><div id="sum"></div><button id="go" disabled>Записаться</button></div></div>
@@ -67,6 +67,7 @@ input{width:100%;padding:13px;border:1.5px solid var(--line);border-radius:12px;
 <script>
 // Telegram-скрипт грузим отдельно: если он долго грузится, приложение все равно стартует через 3 сек
 function loadTG(cb){var done=false;function go(){if(!done){done=true;cb()}}var s=document.createElement("script");s.src="https://telegram.org/js/telegram-web-app.js";s.onload=go;s.onerror=go;(document.head||document.documentElement).appendChild(s);setTimeout(go,3000)}
+document.getElementById("body").innerHTML='<p class="sub">Скрипт запущен… (версия 5)</p>';
 loadTG(function(){
 // Вставьте сюда ссылку на веб-приложение Apps Script (заканчивается на /exec)
 var API = "https://script.google.com/macros/s/AKfycbyCfrOZpNavhpzHPVt940C0Er6qHk2j-MRtEIrRapWOaRAJheYRtcMkaBovM71TOZmq/exec";
@@ -81,7 +82,7 @@ function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {"&":"&
 
 window.onerror = function (m, s, l) { var b = document.getElementById("body"); if (b) b.innerHTML = '<p style="color:#c0392b">Ошибка в приложении: ' + String(m) + ' (строка ' + l + ')</p>'; };
 function withTimeout(p, ms) { return Promise.race([p, new Promise(function (_, rej) { setTimeout(function () { rej(new Error("нет ответа от сервера за " + (ms / 1000) + " сек")); }, ms); })]); }
-$("body").innerHTML = '<p class="sub">Соединяюсь с сервером… (версия 4)</p>';
+$("body").innerHTML = '<p class="sub">Соединяюсь с сервером… (версия 5)</p>';
 withTimeout(fetch(API), 15000).then(function (r) { return r.text(); }).then(function (t) {
   var d; try { d = JSON.parse(t); } catch (e) { throw new Error("сервер вернул не данные: " + t.slice(0, 150)); }
   if (!d || !d.services) throw new Error("пустой ответ: " + t.slice(0, 150));
@@ -291,5 +292,4 @@ function doBook() {
   }).catch(function () { alert("Нет связи"); bchk(); });
 }
 $("rs").addEventListener("click", function (e) {
-  var c = e.target.closest("[data-bs]"); if (!c || !BK) return;
-  var i = c.getAttribute("data-bs"); if (BK.sel[i]
+  va
